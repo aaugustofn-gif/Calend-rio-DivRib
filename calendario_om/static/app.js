@@ -19,9 +19,14 @@ document.addEventListener("DOMContentLoaded", () => {
   carregarTipos().catch((err) => console.error("Erro ao carregar tipos de evento:", err));
 
   try {
+    if (typeof FullCalendar === "undefined") {
+      throw new Error("A biblioteca FullCalendar não carregou (verifique a conexão ou o CDN).");
+    }
     iniciarCalendario();
   } catch (err) {
     console.error("Erro ao iniciar o calendário:", err);
+    document.getElementById("calendar").innerHTML =
+      `<p style="color:#c0392b;padding:16px;">Erro ao carregar o calendário: ${err.message}</p>`;
   }
 });
 
