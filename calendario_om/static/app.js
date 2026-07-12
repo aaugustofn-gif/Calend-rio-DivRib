@@ -2,10 +2,9 @@ let calendar;
 let tiposEventoCache = [];
 let eventoSelecionadoId = null;
 
-document.addEventListener("DOMContentLoaded", async () => {
-  await carregarTipos();
-  iniciarCalendario();
-
+document.addEventListener("DOMContentLoaded", () => {
+  // Liga os botões primeiro, sempre — independente do que acontecer no carregamento
+  // do calendário ou dos tipos de evento, os botões precisam responder.
   document.getElementById("btn-novo-evento").addEventListener("click", () => abrirModalEvento());
   document.getElementById("btn-tipos").addEventListener("click", abrirModalTipos);
   document.getElementById("btn-exportar").addEventListener("click", abrirModalExportar);
@@ -16,6 +15,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     fecharModalDetalhes();
     abrirModalEvento(eventoSelecionadoId);
   });
+
+  carregarTipos().catch((err) => console.error("Erro ao carregar tipos de evento:", err));
+
+  try {
+    iniciarCalendario();
+  } catch (err) {
+    console.error("Erro ao iniciar o calendário:", err);
+  }
 });
 
 function iniciarCalendario() {
