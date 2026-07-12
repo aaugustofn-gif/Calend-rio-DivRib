@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendário de Atividades — OM</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/[email protected]/main.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <header class="topbar">
+    <h1>📅 Calendário de Atividades</h1>
+    <div class="topbar-actions">
+      <button id="btn-novo-evento" class="btn btn-primary">+ Novo Evento</button>
+      <button id="btn-tipos" class="btn btn-secondary">Tipos de Evento</button>
+      <button id="btn-exportar" class="btn btn-secondary">Exportar PDF</button>
+    </div>
+  </header>
+
+  <div id="calendar"></div>
+
+  <!-- Modal: criar/editar evento -->
+  <div id="modal-evento" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="modal-evento-titulo">Novo Evento</h2>
+      <form id="form-evento">
+        <input type="hidden" id="evento-id">
+
+        <label>Nome do evento</label>
+        <input type="text" id="evento-nome" required>
+
+        <div class="row">
+          <div>
+            <label>Data inicial</label>
+            <input type="date" id="evento-data-inicio" required>
+          </div>
+          <div>
+            <label>Data final</label>
+            <input type="date" id="evento-data-fim" required>
+          </div>
+        </div>
+
+        <label>Tipo de evento</label>
+        <select id="evento-tipo" required></select>
+
+        <label>Local</label>
+        <input type="text" id="evento-local">
+
+        <label>Responsável pelo evento</label>
+        <input type="text" id="evento-responsavel">
+
+        <label>Observações</label>
+        <textarea id="evento-observacoes" rows="3"></textarea>
+
+        <div id="bloco-status-manual" class="hidden">
+          <label>Ajuste manual de status (opcional)</label>
+          <select id="evento-status-override">
+            <option value="">Automático (calculado pela data)</option>
+            <option value="adiado">Adiado</option>
+            <option value="cancelado">Cancelado</option>
+            <option value="concluido_antecipado">Concluído antecipadamente</option>
+          </select>
+        </div>
+
+        <label>Seu nome (para registro de quem lançou/editou)</label>
+        <input type="text" id="evento-autor" required>
+
+        <div class="modal-info hidden" id="evento-info-registro"></div>
+
+        <div class="modal-actions">
+          <button type="button" id="btn-excluir-evento" class="btn btn-danger hidden">Excluir</button>
+          <button type="button" class="btn btn-secondary" onclick="fecharModalEvento()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: detalhes do evento (visualização) -->
+  <div id="modal-detalhes" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="detalhe-titulo"></h2>
+      <div class="detalhe-linha"><b>Status:</b> <span id="detalhe-status"></span></div>
+      <div class="detalhe-linha"><b>Tipo:</b> <span id="detalhe-tipo"></span></div>
+      <div class="detalhe-linha"><b>Período:</b> <span id="detalhe-periodo"></span></div>
+      <div class="detalhe-linha"><b>Local:</b> <span id="detalhe-local"></span></div>
+      <div class="detalhe-linha"><b>Responsável:</b> <span id="detalhe-responsavel"></span></div>
+      <div class="detalhe-linha"><b>Observações:</b> <span id="detalhe-observacoes"></span></div>
+      <hr>
+      <div class="detalhe-linha small"><b>Lançado por:</b> <span id="detalhe-criado"></span></div>
+      <div class="detalhe-linha small hidden" id="linha-editado"><b>Última edição:</b> <span id="detalhe-editado"></span></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="fecharModalDetalhes()">Fechar</button>
+        <button class="btn btn-primary" id="btn-editar-do-detalhe">Editar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: tipos de evento -->
+  <div id="modal-tipos" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Tipos de Evento</h2>
+      <div id="lista-tipos"></div>
+      <hr>
+      <form id="form-tipo">
+        <input type="hidden" id="tipo-id">
+        <label>Nome do tipo</label>
+        <input type="text" id="tipo-nome" required>
+        <label>Cor</label>
+        <input type="color" id="tipo-cor" value="#3788d8">
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="fecharModalTipos()">Fechar</button>
+          <button type="submit" class="btn btn-primary">Salvar Tipo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: exportar PDF -->
+  <div id="modal-exportar" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Exportar PDF</h2>
+      <label>Data inicial</label>
+      <input type="date" id="export-data-inicio" required>
+      <label>Data final</label>
+      <input type="date" id="export-data-fim" required>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="fecharModalExportar()">Cancelar</button>
+        <button class="btn btn-primary" onclick="exportarPdf()">Gerar PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/[email protected]/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/[email protected]/locales/pt-br.global.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
