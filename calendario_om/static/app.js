@@ -290,10 +290,12 @@ function fecharModalExportar() {
 function exportarPdf() {
   const inicio = document.getElementById("export-data-inicio").value;
   const fim = document.getElementById("export-data-fim").value;
+  const formato = document.getElementById("export-formato").value;
   if (!inicio || !fim) {
     alert("Selecione as duas datas.");
     return;
   }
-  window.open(`/api/export/pdf?start=${inicio}&end=${fim}`, "_blank");
+  const rota = formato === "timeline" ? "/api/export/pdf-timeline" : "/api/export/pdf";
+  window.open(`${rota}?start=${inicio}&end=${fim}`, "_blank");
   fecharModalExportar();
 }
