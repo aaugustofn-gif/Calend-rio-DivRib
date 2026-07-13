@@ -121,6 +121,11 @@
   <div id="modal-exportar" class="modal-overlay hidden">
     <div class="modal">
       <h2>Exportar PDF</h2>
+      <label>Formato</label>
+      <select id="export-formato">
+        <option value="lista">Lista de eventos (planilha)</option>
+        <option value="timeline">Linha do tempo (gráfico anual)</option>
+      </select>
       <label>Data inicial</label>
       <input type="date" id="export-data-inicio" required>
       <label>Data final</label>
