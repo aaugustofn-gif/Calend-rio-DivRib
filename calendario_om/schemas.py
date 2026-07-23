@@ -3,6 +3,43 @@ from datetime import date, datetime
 from typing import Optional
 
 
+class LoginRequest(BaseModel):
+    nip: str
+    senha: str
+
+
+class TrocarSenhaRequest(BaseModel):
+    nova_senha: str
+    confirmar_senha: str
+
+
+class UsuarioCreate(BaseModel):
+    nome: str
+    nip: str
+    setor: Optional[str] = None
+    senha_inicial: str
+    is_admin: bool = False
+
+
+class UsuarioUpdate(BaseModel):
+    nome: Optional[str] = None
+    setor: Optional[str] = None
+    is_admin: Optional[bool] = None
+    nova_senha: Optional[str] = None  # se preenchido, reseta a senha (e marca para trocar no próximo login)
+
+
+class UsuarioOut(BaseModel):
+    id: int
+    nome: str
+    nip: str
+    setor: Optional[str]
+    is_admin: bool
+    precisa_trocar_senha: bool
+
+    class Config:
+        from_attributes = True
+
+
 class EventTypeCreate(BaseModel):
     name: str
     color: str  # formato hex, ex: "#3788d8"
@@ -25,7 +62,6 @@ class EventCreate(BaseModel):
     start_date: date
     end_date: date
     observations: Optional[str] = None
-    author_name: str  # quem está lançando o evento
 
 
 class EventUpdate(BaseModel):
@@ -37,7 +73,6 @@ class EventUpdate(BaseModel):
     end_date: Optional[date] = None
     observations: Optional[str] = None
     status_override: Optional[str] = None  # "adiado" | "cancelado" | "concluido_antecipado" | "" (limpa override)
-    editor_name: str  # quem está editando
 
 
 class EventOut(BaseModel):

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Calendário OM</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="pagina-login">
+  <div class="caixa-login">
+    <h1>📅 Calendário de Atividades</h1>
+    <p class="subtitulo">Acesso restrito aos militares da OM</p>
+
+    <form id="form-login">
+      <label>NIP</label>
+      <input type="text" id="login-nip" inputmode="numeric" maxlength="8" required autofocus>
+
+      <label>Senha</label>
+      <input type="password" id="login-senha" required>
+
+      <div id="login-erro" class="erro hidden"></div>
+
+      <button type="submit" class="btn btn-primary btn-full">Entrar</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById("form-login").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const nip = document.getElementById("login-nip").value.trim();
+      const senha = document.getElementById("login-senha").value;
+      const erroDiv = document.getElementById("login-erro");
+      erroDiv.classList.add("hidden");
+
+      try {
+        const resp = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nip, senha }),
+        });
+        if (!resp.ok) {
+          const erro = await resp.json();
+          erroDiv.textContent = erro.detail || "Erro ao entrar.";
+          erroDiv.classList.remove("hidden");
+          return;
+        }
+        window.location.href = "/";
+      } catch (e) {
+        erroDiv.textContent = "Erro de conexão. Tente novamente.";
+        erroDiv.classList.remove("hidden");
+      }
+    });
+  </script>
+</body>
+</html>

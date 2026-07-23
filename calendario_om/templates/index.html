@@ -15,6 +15,13 @@
       <button id="btn-novo-evento" class="btn btn-primary">+ Novo Evento</button>
       <button id="btn-tipos" class="btn btn-secondary">Tipos de Evento</button>
       <button id="btn-exportar" class="btn btn-secondary">Exportar PDF</button>
+      {% if usuario.is_admin %}
+      <button id="btn-usuarios" class="btn btn-secondary">Usuários</button>
+      {% endif %}
+      <span class="userbar">
+        {{ usuario.nome }} ({{ usuario.nip }})
+        <button id="btn-sair" class="btn btn-secondary">Sair</button>
+      </span>
     </div>
   </header>
 
@@ -62,9 +69,6 @@
             <option value="concluido_antecipado">Concluído antecipadamente</option>
           </select>
         </div>
-
-        <label>Seu nome (para registro de quem lançou/editou)</label>
-        <input type="text" id="evento-autor" required>
 
         <div class="modal-info hidden" id="evento-info-registro"></div>
 
@@ -137,6 +141,35 @@
     </div>
   </div>
 
+  <!-- Modal: usuários (somente admin) -->
+  <div id="modal-usuarios" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Usuários</h2>
+      <div id="lista-usuarios"></div>
+      <hr>
+      <form id="form-usuario">
+        <input type="hidden" id="usuario-id">
+        <label>Nome do militar</label>
+        <input type="text" id="usuario-nome" required>
+        <label>NIP (8 dígitos)</label>
+        <input type="text" id="usuario-nip" inputmode="numeric" maxlength="8" required>
+        <label>Setor</label>
+        <input type="text" id="usuario-setor">
+        <label id="label-usuario-senha">Senha inicial</label>
+        <input type="text" id="usuario-senha" placeholder="Deixe em branco para não alterar (ao editar)">
+        <label class="checkbox-linha">
+          <input type="checkbox" id="usuario-admin"> É administrador
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="btn-excluir-usuario" class="btn btn-danger hidden">Excluir</button>
+          <button type="button" class="btn btn-secondary" onclick="fecharModalUsuarios()">Fechar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>window.IS_ADMIN = {{ 'true' if usuario.is_admin else 'false' }};</script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6/index.global.min.js"
           onerror="this.onerror=null;var s=document.createElement('script');s.src='https://unpkg.com/fullcalendar@6/index.global.min.js';document.head.appendChild(s);"></script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6/locales-all.global.min.js"

@@ -1,6 +1,17 @@
 let calendar;
 let tiposEventoCache = [];
 let eventoSelecionadoId = null;
+let usuariosCache = [];
+
+// Redireciona para o login automaticamente se a sessão expirar (resposta 401)
+const _fetchOriginal = window.fetch;
+window.fetch = async (...args) => {
+  const resp = await _fetchOriginal(...args);
+  if (resp.status === 401) {
+    window.location.href = "/login";
+  }
+  return resp;
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   // Liga os botões primeiro, sempre — independente do que acontecer no carregamento
@@ -15,6 +26,14 @@ document.addEventListener("DOMContentLoaded", () => {
     fecharModalDetalhes();
     abrirModalEvento(eventoSelecionadoId);
   });
+  document.getElementById("btn-sair").addEventListener("click", sair);
+
+  const btnUsuarios = document.getElementById("btn-usuarios");
+  if (btnUsuarios) {
+    btnUsuarios.addEventListener("click", abrirModalUsuarios);
+    document.getElementById("form-usuario").addEventListener("submit", salvarUsuario);
+    document.getElementById("btn-excluir-usuario").addEventListener("click", excluirUsuario);
+  }
 
   carregarTipos().catch((err) => console.error("Erro ao carregar tipos de evento:", err));
 
@@ -29,6 +48,11 @@ document.addEventListener("DOMContentLoaded", () => {
       `<p style="color:#c0392b;padding:16px;">Erro ao carregar o calendário: ${err.message}</p>`;
   }
 });
+
+async function sair() {
+  await fetch("/api/logout", { method: "POST" });
+  window.location.href = "/login";
+}
 
 function iniciarCalendario() {
   const el = document.getElementById("calendar");
@@ -182,20 +206,19 @@ function fecharModalEvento() {
 async function salvarEvento(ev) {
   ev.preventDefault();
   const id = document.getElementById("evento-id").value;
-  const nome = document.getElementById("evento-autor").value;
+
+  const payload = {
+    title: document.getElementById("evento-nome").value,
+    start_date: document.getElementById("evento-data-inicio").value,
+    end_date: document.getElementById("evento-data-fim").value,
+    event_type_id: parseInt(document.getElementById("evento-tipo").value),
+    location: document.getElementById("evento-local").value,
+    responsible: document.getElementById("evento-responsavel").value,
+    observations: document.getElementById("evento-observacoes").value,
+  };
 
   if (id) {
-    const payload = {
-      title: document.getElementById("evento-nome").value,
-      start_date: document.getElementById("evento-data-inicio").value,
-      end_date: document.getElementById("evento-data-fim").value,
-      event_type_id: parseInt(document.getElementById("evento-tipo").value),
-      location: document.getElementById("evento-local").value,
-      responsible: document.getElementById("evento-responsavel").value,
-      observations: document.getElementById("evento-observacoes").value,
-      status_override: document.getElementById("evento-status-override").value,
-      editor_name: nome,
-    };
+    payload.status_override = document.getElementById("evento-status-override").value;
     const resp = await fetch(`/api/events/${id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
     });
@@ -205,16 +228,6 @@ async function salvarEvento(ev) {
       return;
     }
   } else {
-    const payload = {
-      title: document.getElementById("evento-nome").value,
-      start_date: document.getElementById("evento-data-inicio").value,
-      end_date: document.getElementById("evento-data-fim").value,
-      event_type_id: parseInt(document.getElementById("evento-tipo").value),
-      location: document.getElementById("evento-local").value,
-      responsible: document.getElementById("evento-responsavel").value,
-      observations: document.getElementById("evento-observacoes").value,
-      author_name: nome,
-    };
     const resp = await fetch("/api/events", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
     });
@@ -298,4 +311,103 @@ function exportarPdf() {
   const rota = formato === "timeline" ? "/api/export/pdf-timeline" : "/api/export/pdf";
   window.open(`${rota}?start=${inicio}&end=${fim}`, "_blank");
   fecharModalExportar();
+}
+
+// ---------- Usuários (somente admin) ----------
+
+async function carregarUsuarios() {
+  const resp = await fetch("/api/usuarios");
+  usuariosCache = await resp.json();
+  renderizarListaUsuarios();
+}
+
+function renderizarListaUsuarios() {
+  const div = document.getElementById("lista-usuarios");
+  div.innerHTML = usuariosCache.map(u => `
+    <div class="tipo-item">
+      <span>${u.nome} — NIP ${u.nip}${u.setor ? " — " + u.setor : ""}${u.is_admin ? " (admin)" : ""}</span>
+      <button type="button" class="btn btn-secondary" onclick="editarUsuario(${u.id})">Editar</button>
+    </div>
+  `).join("");
+}
+
+function abrirModalUsuarios() {
+  document.getElementById("form-usuario").reset();
+  document.getElementById("usuario-id").value = "";
+  document.getElementById("usuario-nip").disabled = false;
+  document.getElementById("label-usuario-senha").textContent = "Senha inicial";
+  document.getElementById("btn-excluir-usuario").classList.add("hidden");
+  carregarUsuarios();
+  document.getElementById("modal-usuarios").classList.remove("hidden");
+}
+
+function fecharModalUsuarios() {
+  document.getElementById("modal-usuarios").classList.add("hidden");
+}
+
+function editarUsuario(id) {
+  const u = usuariosCache.find(x => x.id === id);
+  document.getElementById("usuario-id").value = u.id;
+  document.getElementById("usuario-nome").value = u.nome;
+  document.getElementById("usuario-nip").value = u.nip;
+  document.getElementById("usuario-nip").disabled = true; // NIP não muda depois de criado
+  document.getElementById("usuario-setor").value = u.setor || "";
+  document.getElementById("usuario-senha").value = "";
+  document.getElementById("label-usuario-senha").textContent = "Nova senha (deixe em branco para não alterar)";
+  document.getElementById("usuario-admin").checked = u.is_admin;
+  document.getElementById("btn-excluir-usuario").classList.remove("hidden");
+}
+
+async function salvarUsuario(ev) {
+  ev.preventDefault();
+  const id = document.getElementById("usuario-id").value;
+  const nome = document.getElementById("usuario-nome").value;
+  const setor = document.getElementById("usuario-setor").value;
+  const senha = document.getElementById("usuario-senha").value;
+  const isAdmin = document.getElementById("usuario-admin").checked;
+
+  if (id) {
+    const payload = { nome, setor, is_admin: isAdmin };
+    if (senha) payload.nova_senha = senha;
+    const resp = await fetch(`/api/usuarios/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      const erro = await resp.json();
+      alert(erro.detail || "Erro ao salvar usuário.");
+      return;
+    }
+  } else {
+    const nip = document.getElementById("usuario-nip").value.trim();
+    if (!senha) {
+      alert("Defina uma senha inicial para o novo usuário.");
+      return;
+    }
+    const payload = { nome, nip, setor, senha_inicial: senha, is_admin: isAdmin };
+    const resp = await fetch("/api/usuarios", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      const erro = await resp.json();
+      alert(erro.detail || "Erro ao criar usuário.");
+      return;
+    }
+  }
+
+  await carregarUsuarios();
+  abrirModalUsuarios();
+}
+
+async function excluirUsuario() {
+  const id = document.getElementById("usuario-id").value;
+  if (!id) return;
+  if (!confirm("Excluir este usuário? Ele perderá o acesso ao calendário imediatamente.")) return;
+  const resp = await fetch(`/api/usuarios/${id}`, { method: "DELETE" });
+  if (!resp.ok) {
+    const erro = await resp.json();
+    alert(erro.detail || "Erro ao excluir usuário.");
+    return;
+  }
+  await carregarUsuarios();
+  abrirModalUsuarios();
 }

@@ -103,3 +103,56 @@ body {
   display: inline-block;
 }
 .tipo-item button { margin-left: auto; font-size: 0.8rem; padding: 4px 8px; }
+
+/* ---------- Login / Troca de senha ---------- */
+.pagina-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+}
+.caixa-login {
+  background: white;
+  padding: 32px;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+  width: 100%;
+  max-width: 380px;
+}
+.caixa-login h1 { margin: 0 0 4px 0; font-size: 1.4rem; }
+.caixa-login .subtitulo { color: #666; font-size: 0.85rem; margin-bottom: 18px; }
+.caixa-login label { display: block; margin-top: 12px; font-weight: 600; font-size: 0.9rem; }
+.caixa-login input {
+  width: 100%;
+  padding: 10px;
+  margin-top: 4px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+.btn-full { width: 100%; margin-top: 20px; padding: 12px; font-size: 1rem; }
+.erro {
+  margin-top: 10px;
+  color: #c0392b;
+  background: #fdecea;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.userbar {
+  font-size: 0.85rem;
+  color: #dfe6ec;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-linha {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400 !important;
+}
+.checkbox-linha input { width: auto !important; }

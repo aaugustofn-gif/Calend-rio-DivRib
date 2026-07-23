@@ -1,13 +1,17 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from datetime import date, datetime, timedelta
+from passlib.context import CryptContext
 import io
+import os
+import secrets
 
-from database import Base, engine, get_db
+from database import Base, engine, get_db, SessionLocal
 import models
 import schemas
 
@@ -21,9 +25,53 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 
 Base.metadata.create_all(bind=engine)
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ---------- Criação automática do admin inicial (só roda se não existir nenhum usuário) ----------
+with SessionLocal() as _db:
+    if _db.query(models.Usuario).count() == 0:
+        nip_inicial = os.getenv("ADMIN_NIP")
+        senha_inicial = os.getenv("ADMIN_SENHA_INICIAL")
+        nome_inicial = os.getenv("ADMIN_NOME", "Administrador")
+        if nip_inicial and senha_inicial:
+            admin = models.Usuario(
+                nome=nome_inicial,
+                nip=nip_inicial,
+                setor="Comando",
+                senha_hash=pwd_context.hash(senha_inicial),
+                is_admin=True,
+                precisa_trocar_senha=True,
+            )
+            _db.add(admin)
+            _db.commit()
+
 app = FastAPI(title="Calendário OM")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", secrets.token_hex(32)))
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+
+# ---------- Autenticação ----------
+
+def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    return db.query(models.Usuario).get(user_id)
+
+
+def get_current_user(request: Request, db: Session = Depends(get_db)):
+    usuario = get_current_user_optional(request, db)
+    if not usuario:
+        raise HTTPException(401, "Não autenticado.")
+    return usuario
+
+
+def get_current_admin(usuario: models.Usuario = Depends(get_current_user)):
+    if not usuario.is_admin:
+        raise HTTPException(403, "Apenas administradores podem realizar esta ação.")
+    return usuario
+
 
 STATUS_LABELS = {
     "futuro": "Futuro",
@@ -60,19 +108,135 @@ def compute_status(evento: models.Event) -> str:
 # ---------- Páginas ----------
 
 @app.get("/")
-def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+def index(request: Request, db: Session = Depends(get_db)):
+    usuario = get_current_user_optional(request, db)
+    if not usuario:
+        return RedirectResponse("/login")
+    if usuario.precisa_trocar_senha:
+        return RedirectResponse("/trocar-senha")
+    return templates.TemplateResponse("index.html", {"request": request, "usuario": usuario})
+
+
+@app.get("/login")
+def pagina_login(request: Request, db: Session = Depends(get_db)):
+    if get_current_user_optional(request, db):
+        return RedirectResponse("/")
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.get("/trocar-senha")
+def pagina_trocar_senha(request: Request, db: Session = Depends(get_db)):
+    usuario = get_current_user_optional(request, db)
+    if not usuario:
+        return RedirectResponse("/login")
+    return templates.TemplateResponse("trocar_senha.html", {"request": request})
+
+
+@app.post("/api/login")
+def login(payload: schemas.LoginRequest, request: Request, db: Session = Depends(get_db)):
+    usuario = db.query(models.Usuario).filter(models.Usuario.nip == payload.nip).first()
+    if not usuario or not pwd_context.verify(payload.senha, usuario.senha_hash):
+        raise HTTPException(401, "NIP ou senha incorretos.")
+    request.session["user_id"] = usuario.id
+    return {"ok": True, "precisa_trocar_senha": usuario.precisa_trocar_senha}
+
+
+@app.post("/api/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
+
+@app.post("/api/trocar-senha")
+def trocar_senha(payload: schemas.TrocarSenhaRequest, usuario: models.Usuario = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+    if payload.nova_senha != payload.confirmar_senha:
+        raise HTTPException(400, "As senhas não coincidem.")
+    if len(payload.nova_senha) < 6:
+        raise HTTPException(400, "A senha deve ter pelo menos 6 caracteres.")
+    usuario.senha_hash = pwd_context.hash(payload.nova_senha)
+    usuario.precisa_trocar_senha = False
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/me", response_model=schemas.UsuarioOut)
+def me(usuario: models.Usuario = Depends(get_current_user)):
+    return usuario
+
+
+# ---------- Gestão de usuários (somente admin) ----------
+
+@app.get("/api/usuarios", response_model=list[schemas.UsuarioOut])
+def listar_usuarios(db: Session = Depends(get_db), admin: models.Usuario = Depends(get_current_admin)):
+    return db.query(models.Usuario).order_by(models.Usuario.nome).all()
+
+
+@app.post("/api/usuarios", response_model=schemas.UsuarioOut)
+def criar_usuario(payload: schemas.UsuarioCreate, db: Session = Depends(get_db),
+                   admin: models.Usuario = Depends(get_current_admin)):
+    if not payload.nip.isdigit() or len(payload.nip) != 8:
+        raise HTTPException(400, "O NIP deve ter exatamente 8 dígitos numéricos.")
+    existente = db.query(models.Usuario).filter(models.Usuario.nip == payload.nip).first()
+    if existente:
+        raise HTTPException(400, "Já existe um usuário com esse NIP.")
+    novo = models.Usuario(
+        nome=payload.nome,
+        nip=payload.nip,
+        setor=payload.setor,
+        senha_hash=pwd_context.hash(payload.senha_inicial),
+        is_admin=payload.is_admin,
+        precisa_trocar_senha=True,
+    )
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return novo
+
+
+@app.put("/api/usuarios/{usuario_id}", response_model=schemas.UsuarioOut)
+def editar_usuario(usuario_id: int, payload: schemas.UsuarioUpdate, db: Session = Depends(get_db),
+                    admin: models.Usuario = Depends(get_current_admin)):
+    usuario = db.query(models.Usuario).get(usuario_id)
+    if not usuario:
+        raise HTTPException(404, "Usuário não encontrado.")
+    if payload.nome is not None:
+        usuario.nome = payload.nome
+    if payload.setor is not None:
+        usuario.setor = payload.setor
+    if payload.is_admin is not None:
+        usuario.is_admin = payload.is_admin
+    if payload.nova_senha:
+        usuario.senha_hash = pwd_context.hash(payload.nova_senha)
+        usuario.precisa_trocar_senha = True
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
+
+@app.delete("/api/usuarios/{usuario_id}")
+def excluir_usuario(usuario_id: int, db: Session = Depends(get_db),
+                     admin: models.Usuario = Depends(get_current_admin)):
+    if usuario_id == admin.id:
+        raise HTTPException(400, "Você não pode excluir seu próprio usuário.")
+    usuario = db.query(models.Usuario).get(usuario_id)
+    if not usuario:
+        raise HTTPException(404, "Usuário não encontrado.")
+    db.delete(usuario)
+    db.commit()
+    return {"ok": True}
 
 
 # ---------- Tipos de evento ----------
 
 @app.get("/api/event-types", response_model=list[schemas.EventTypeOut])
-def list_event_types(db: Session = Depends(get_db)):
+def list_event_types(db: Session = Depends(get_db), usuario: models.Usuario = Depends(get_current_user)):
     return db.query(models.EventType).order_by(models.EventType.name).all()
 
 
 @app.post("/api/event-types", response_model=schemas.EventTypeOut)
-def create_event_type(payload: schemas.EventTypeCreate, db: Session = Depends(get_db)):
+def create_event_type(payload: schemas.EventTypeCreate, db: Session = Depends(get_db),
+                       usuario: models.Usuario = Depends(get_current_user)):
     existente = db.query(models.EventType).filter(models.EventType.name == payload.name).first()
     if existente:
         raise HTTPException(400, "Já existe um tipo de evento com esse nome.")
@@ -84,7 +248,8 @@ def create_event_type(payload: schemas.EventTypeCreate, db: Session = Depends(ge
 
 
 @app.put("/api/event-types/{type_id}", response_model=schemas.EventTypeOut)
-def update_event_type(type_id: int, payload: schemas.EventTypeCreate, db: Session = Depends(get_db)):
+def update_event_type(type_id: int, payload: schemas.EventTypeCreate, db: Session = Depends(get_db),
+                       usuario: models.Usuario = Depends(get_current_user)):
     tipo = db.query(models.EventType).get(type_id)
     if not tipo:
         raise HTTPException(404, "Tipo de evento não encontrado.")
@@ -96,7 +261,8 @@ def update_event_type(type_id: int, payload: schemas.EventTypeCreate, db: Sessio
 
 
 @app.delete("/api/event-types/{type_id}")
-def delete_event_type(type_id: int, db: Session = Depends(get_db)):
+def delete_event_type(type_id: int, db: Session = Depends(get_db),
+                       usuario: models.Usuario = Depends(get_current_user)):
     em_uso = db.query(models.Event).filter(models.Event.event_type_id == type_id).first()
     if em_uso:
         raise HTTPException(400, "Não é possível excluir: existem eventos usando esse tipo.")
@@ -111,7 +277,7 @@ def delete_event_type(type_id: int, db: Session = Depends(get_db)):
 # ---------- Eventos ----------
 
 @app.get("/api/events")
-def list_events(db: Session = Depends(get_db)):
+def list_events(db: Session = Depends(get_db), usuario: models.Usuario = Depends(get_current_user)):
     eventos = db.query(models.Event).all()
     resultado = []
     for e in eventos:
@@ -143,7 +309,8 @@ def list_events(db: Session = Depends(get_db)):
 
 
 @app.post("/api/events", response_model=schemas.EventOut)
-def create_event(payload: schemas.EventCreate, db: Session = Depends(get_db)):
+def create_event(payload: schemas.EventCreate, db: Session = Depends(get_db),
+                  usuario: models.Usuario = Depends(get_current_user)):
     if payload.end_date < payload.start_date:
         raise HTTPException(400, "A data final não pode ser anterior à data inicial.")
     tipo = db.query(models.EventType).get(payload.event_type_id)
@@ -157,7 +324,7 @@ def create_event(payload: schemas.EventCreate, db: Session = Depends(get_db)):
         start_date=payload.start_date,
         end_date=payload.end_date,
         observations=payload.observations,
-        created_by=payload.author_name,
+        created_by=usuario.nome,
         created_at=datetime.utcnow(),
     )
     db.add(novo)
@@ -167,12 +334,13 @@ def create_event(payload: schemas.EventCreate, db: Session = Depends(get_db)):
 
 
 @app.put("/api/events/{event_id}", response_model=schemas.EventOut)
-def update_event(event_id: int, payload: schemas.EventUpdate, db: Session = Depends(get_db)):
+def update_event(event_id: int, payload: schemas.EventUpdate, db: Session = Depends(get_db),
+                  usuario: models.Usuario = Depends(get_current_user)):
     evento = db.query(models.Event).get(event_id)
     if not evento:
         raise HTTPException(404, "Evento não encontrado.")
 
-    dados = payload.dict(exclude_unset=True, exclude={"editor_name"})
+    dados = payload.dict(exclude_unset=True)
     for campo, valor in dados.items():
         if campo == "status_override" and valor == "":
             valor = None
@@ -181,7 +349,7 @@ def update_event(event_id: int, payload: schemas.EventUpdate, db: Session = Depe
     if evento.end_date < evento.start_date:
         raise HTTPException(400, "A data final não pode ser anterior à data inicial.")
 
-    evento.updated_by = payload.editor_name
+    evento.updated_by = usuario.nome
     evento.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(evento)
@@ -189,7 +357,8 @@ def update_event(event_id: int, payload: schemas.EventUpdate, db: Session = Depe
 
 
 @app.delete("/api/events/{event_id}")
-def delete_event(event_id: int, db: Session = Depends(get_db)):
+def delete_event(event_id: int, db: Session = Depends(get_db),
+                  usuario: models.Usuario = Depends(get_current_user)):
     evento = db.query(models.Event).get(event_id)
     if not evento:
         raise HTTPException(404, "Evento não encontrado.")
@@ -201,7 +370,8 @@ def delete_event(event_id: int, db: Session = Depends(get_db)):
 # ---------- Exportação em PDF ----------
 
 @app.get("/api/export/pdf")
-def export_pdf(start: date, end: date, db: Session = Depends(get_db)):
+def export_pdf(start: date, end: date, db: Session = Depends(get_db),
+                usuario: models.Usuario = Depends(get_current_user)):
     if end < start:
         raise HTTPException(400, "A data final não pode ser anterior à data inicial.")
 
@@ -344,7 +514,8 @@ class _EventoDesenho:
 
 
 @app.get("/api/export/pdf-timeline")
-def export_pdf_timeline(start: date, end: date, db: Session = Depends(get_db)):
+def export_pdf_timeline(start: date, end: date, db: Session = Depends(get_db),
+                         usuario: models.Usuario = Depends(get_current_user)):
     if end < start:
         raise HTTPException(400, "A data final não pode ser anterior à data inicial.")
 

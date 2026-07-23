@@ -1,7 +1,20 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(150), nullable=False)
+    nip = Column(String(8), unique=True, nullable=False, index=True)
+    setor = Column(String(150), nullable=True)
+    senha_hash = Column(String(255), nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
+    precisa_trocar_senha = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class EventType(Base):

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trocar Senha — Calendário OM</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="pagina-login">
+  <div class="caixa-login">
+    <h1>🔑 Trocar Senha</h1>
+    <p class="subtitulo">Este é seu primeiro acesso (ou sua senha foi redefinida). Defina uma nova senha para continuar.</p>
+
+    <form id="form-trocar-senha">
+      <label>Nova senha</label>
+      <input type="password" id="nova-senha" minlength="6" required>
+
+      <label>Confirmar nova senha</label>
+      <input type="password" id="confirmar-senha" minlength="6" required>
+
+      <div id="trocar-erro" class="erro hidden"></div>
+
+      <button type="submit" class="btn btn-primary btn-full">Salvar e entrar</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById("form-trocar-senha").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const nova_senha = document.getElementById("nova-senha").value;
+      const confirmar_senha = document.getElementById("confirmar-senha").value;
+      const erroDiv = document.getElementById("trocar-erro");
+      erroDiv.classList.add("hidden");
+
+      try {
+        const resp = await fetch("/api/trocar-senha", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nova_senha, confirmar_senha }),
+        });
+        if (!resp.ok) {
+          const erro = await resp.json();
+          erroDiv.textContent = erro.detail || "Erro ao trocar senha.";
+          erroDiv.classList.remove("hidden");
+          return;
+        }
+        window.location.href = "/";
+      } catch (e) {
+        erroDiv.textContent = "Erro de conexão. Tente novamente.";
+        erroDiv.classList.remove("hidden");
+      }
+    });
+  </script>
+</body>
+</html>
