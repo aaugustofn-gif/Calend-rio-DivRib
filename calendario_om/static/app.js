@@ -27,6 +27,9 @@ document.addEventListener("DOMContentLoaded", () => {
     abrirModalEvento(eventoSelecionadoId);
   });
   document.getElementById("btn-sair").addEventListener("click", sair);
+  document.getElementById("btn-assinar-google").addEventListener("click", abrirModalAssinar);
+  document.getElementById("btn-copiar-link").addEventListener("click", copiarLinkGoogle);
+  document.getElementById("btn-regenerar-link").addEventListener("click", regenerarLinkGoogle);
 
   const btnUsuarios = document.getElementById("btn-usuarios");
   if (btnUsuarios) {
@@ -410,4 +413,36 @@ async function excluirUsuario() {
   }
   await carregarUsuarios();
   abrirModalUsuarios();
+}
+
+// ---------- Assinar no Google Calendar ----------
+
+async function abrirModalAssinar() {
+  const resp = await fetch("/api/me/link-google");
+  const dados = await resp.json();
+  document.getElementById("link-google-url").value = dados.url;
+  document.getElementById("modal-assinar").classList.remove("hidden");
+}
+
+function fecharModalAssinar() {
+  document.getElementById("modal-assinar").classList.add("hidden");
+}
+
+function copiarLinkGoogle() {
+  const campo = document.getElementById("link-google-url");
+  campo.select();
+  campo.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(campo.value).then(() => {
+    const btn = document.getElementById("btn-copiar-link");
+    const textoOriginal = btn.textContent;
+    btn.textContent = "Copiado!";
+    setTimeout(() => { btn.textContent = textoOriginal; }, 1500);
+  });
+}
+
+async function regenerarLinkGoogle() {
+  if (!confirm("Isso torna o link antigo inválido — se você já configurou no Google, vai precisar refazer com o novo link. Continuar?")) return;
+  const resp = await fetch("/api/me/regenerar-link-google", { method: "POST" });
+  const dados = await resp.json();
+  document.getElementById("link-google-url").value = dados.url;
 }

@@ -15,6 +15,7 @@
       <button id="btn-novo-evento" class="btn btn-primary">+ Novo Evento</button>
       <button id="btn-tipos" class="btn btn-secondary">Tipos de Evento</button>
       <button id="btn-exportar" class="btn btn-secondary">Exportar PDF</button>
+      <button id="btn-assinar-google" class="btn btn-secondary">Assinar no Google</button>
       {% if usuario.is_admin %}
       <button id="btn-usuarios" class="btn btn-secondary">Usuários</button>
       {% endif %}
@@ -166,6 +167,32 @@
           <button type="submit" class="btn btn-primary">Salvar</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal: assinar no Google Calendar -->
+  <div id="modal-assinar" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Assinar no Google Calendar</h2>
+      <p class="texto-explicativo">
+        Este é o seu link pessoal. Ele mostra os eventos do calendário da OM dentro do seu
+        Google Agenda, junto com suas outras agendas — só para visualização (o Google não
+        deixa criar eventos aqui através dele). A atualização não é instantânea; o Google
+        costuma sincronizar a cada algumas horas.
+      </p>
+
+      <label>Seu link</label>
+      <input type="text" id="link-google-url" readonly>
+      <button type="button" class="btn btn-secondary" id="btn-copiar-link" style="margin-top:8px;">Copiar link</button>
+
+      <hr>
+      <p class="texto-explicativo"><b>Como usar:</b> no Google Calendar, vá em
+        Configurações → Adicionar calendário → <b>Por URL</b>, cole o link acima e confirme.</p>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="btn-regenerar-link">Gerar novo link (revogar o atual)</button>
+        <button type="button" class="btn btn-secondary" onclick="fecharModalAssinar()">Fechar</button>
+      </div>
     </div>
   </div>
 

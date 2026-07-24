@@ -1,12 +1,13 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import StreamingResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, Response
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from datetime import date, datetime, timedelta
 from passlib.context import CryptContext
+from icalendar import Calendar as ICalCalendar, Event as ICalEvent
 import io
 import os
 import secrets
@@ -163,6 +164,69 @@ def trocar_senha(payload: schemas.TrocarSenhaRequest, usuario: models.Usuario = 
 @app.get("/api/me", response_model=schemas.UsuarioOut)
 def me(usuario: models.Usuario = Depends(get_current_user)):
     return usuario
+
+
+@app.get("/api/me/link-google")
+def obter_link_google(request: Request, usuario: models.Usuario = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    if not usuario.ics_token:
+        usuario.ics_token = secrets.token_urlsafe(24)
+        db.commit()
+    url_base = str(request.base_url).rstrip("/")
+    return {"url": f"{url_base}/calendario/{usuario.ics_token}.ics"}
+
+
+@app.post("/api/me/regenerar-link-google")
+def regenerar_link_google(request: Request, usuario: models.Usuario = Depends(get_current_user),
+                           db: Session = Depends(get_db)):
+    usuario.ics_token = secrets.token_urlsafe(24)
+    db.commit()
+    url_base = str(request.base_url).rstrip("/")
+    return {"url": f"{url_base}/calendario/{usuario.ics_token}.ics"}
+
+
+@app.get("/calendario/{token}.ics")
+def feed_ics(token: str, db: Session = Depends(get_db)):
+    """Feed público (sem login) para assinatura no Google Calendar e afins.
+    Protegido apenas pelo token secreto na própria URL — quem tiver o link
+    consegue visualizar os eventos (somente leitura)."""
+    usuario = db.query(models.Usuario).filter(models.Usuario.ics_token == token).first()
+    if not usuario:
+        raise HTTPException(404, "Link inválido.")
+
+    eventos = db.query(models.Event).all()
+
+    cal = ICalCalendar()
+    cal.add("prodid", "-//Calendario OM//calendario-om//PT-BR")
+    cal.add("version", "2.0")
+    cal.add("x-wr-calname", "Calendário de Atividades — OM")
+    cal.add("x-wr-timezone", "America/Sao_Paulo")
+
+    for e in eventos:
+        status = compute_status(e)
+        evt = ICalEvent()
+        evt.add("uid", f"evento-{e.id}@calendario-om")
+        evt.add("summary", f"[{STATUS_LABELS.get(status, status)}] {e.title}")
+        evt.add("dtstart", e.start_date)
+        evt.add("dtend", e.end_date + timedelta(days=1))  # convenção de evento de dia inteiro (fim exclusivo)
+        evt.add("dtstamp", datetime.utcnow())
+        if e.location:
+            evt.add("location", e.location)
+
+        linhas_descricao = [f"Tipo: {e.event_type.name}", f"Status: {STATUS_LABELS.get(status, status)}"]
+        if e.responsible:
+            linhas_descricao.append(f"Responsável: {e.responsible}")
+        if e.observations:
+            linhas_descricao.append(f"Observações: {e.observations}")
+        evt.add("description", "\n".join(linhas_descricao))
+
+        cal.add_component(evt)
+
+    return Response(
+        content=cal.to_ical(),
+        media_type="text/calendar",
+        headers={"Content-Disposition": "inline; filename=calendario_om.ics"}
+    )
 
 
 # ---------- Gestão de usuários (somente admin) ----------

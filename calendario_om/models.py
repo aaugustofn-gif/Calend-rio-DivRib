@@ -14,6 +14,7 @@ class Usuario(Base):
     senha_hash = Column(String(255), nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     precisa_trocar_senha = Column(Boolean, default=True, nullable=False)
+    ics_token = Column(String(64), unique=True, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

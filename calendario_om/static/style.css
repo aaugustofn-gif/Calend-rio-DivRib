@@ -156,3 +156,9 @@ body {
   font-weight: 400 !important;
 }
 .checkbox-linha input { width: auto !important; }
+
+.texto-explicativo {
+  font-size: 0.82rem;
+  color: #555;
+  line-height: 1.4;
+}
